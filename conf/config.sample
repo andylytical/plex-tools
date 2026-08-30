@@ -1,0 +1,10 @@
+[connection]
+host = myplexserver.local
+port = 32400
+protocol = http
+
+[library]
+music_library_name = Music
+
+[runtime]
+lastrun = 0
