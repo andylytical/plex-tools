@@ -9,8 +9,7 @@ logr = logging.getLogger( __name__ )
 
 
 class Playlist_Manager:
-    def __init__( self, config: config.Config ):
-        self.cfg = config
+    def __init__( self ):
         self.playlists = {}
         self.load()
 
@@ -18,7 +17,7 @@ class Playlist_Manager:
     def load( self ):
         """ Get playlists from plex
         """
-        for plexPL in self.cfg.music_library.playlists():
+        for plexPL in config.music_library().playlists():
             if not plexPL.smart:
                 self.playlists[ plexPL.title ] = playlist.Playlist( plexPL )
         logr.debug( f'Loaded {len(self.playlists)} playlists: {self.playlists.keys()}' )
@@ -60,12 +59,8 @@ class Playlist_Manager:
 
 
     def add_track_to_playlist( self, PL_name: str, track: plexapi.audio.Track) -> None:
-        # plexPL = self.playlists.setdefault(
-        #     PL_name,
-        #     playlist.Playlist.new_by_name( name=PL_name, cfg=self.cfg )
-        # )
         if PL_name not in self.playlists:
-            self.playlists[ PL_name ] = playlist.Playlist.new_by_name( name=PL_name, cfg=self.cfg )
+            self.playlists[ PL_name ] = playlist.Playlist.new_by_name( name=PL_name )
         self.playlists[ PL_name ].add_track( track )
 
 
@@ -77,6 +72,7 @@ class Playlist_Manager:
         try:
             self.playlists[ PL_name ].remove_track( track )
         except KeyError:
+            # TODO - save this somewhere if it ever catches, want to know why
             pass
 
 

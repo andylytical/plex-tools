@@ -2,8 +2,11 @@ import time
 import plexapi
 import config
 import logging
+import pprint
 from playlist_manager import Playlist_Manager
 from pathlib import Path
+
+logr = logging.getLogger( __name__ )
 
 
 def last_file_update( track: plexapi.audio.Track ) -> float:
@@ -11,34 +14,40 @@ def last_file_update( track: plexapi.audio.Track ) -> float:
 
 
 def main() -> None:
-    start = time.time()
-
-    cfg = config.Config(
-        cfg_path_env_var = 'PLEX_TOOLS_CONFIG',
-        default_cfg_path = Path.home() / '.config/plex-tools/config'
-    )
-    lastrun = float( cfg.get_lastrun_timestamp() )
+    lastrun = float( config.lastrun_timestamp() )
+    # config.lastrun_timestamp()
+    # raise SystemExit( 'forced exit' )
 
     # Create playlist manager
-    PLmgr = Playlist_Manager( cfg )
+    PLmgr = Playlist_Manager()
     # raise SystemExit( f"DEBUG : elapsed time '{elapsed}' secs" )
 
+    total_tracks=0
+    tracks_changed_since_last_run=0
+    start = time.time()
     limit=None
-    # limit=10000
-    count=0
-    elapsed = time.time() - start
+    # limit=100
     # searchTracks() calls search(libtype='track') under the hood
-    for track in cfg.music_library.searchTracks( maxresults=limit ):
-        count += 1
+    for track in config.music_library().searchTracks( maxresults=limit ):
+        total_tracks += 1
         if last_file_update( track ) > lastrun:
             PLmgr.update_playlists_for_track( track )
-        if (count % 100) == 0:
+            tracks_changed_since_last_run += 1
+        if (total_tracks % 100) == 0:
             elapsed = time.time() - start
-            print( f">>>>> {count} files ... in {elapsed} secs")
+            logr.info( f"{total_tracks} tracks ... in {elapsed} secs")
 
     PLmgr.sync()
 
-    # cfg.mark_lastrun_timestamp()
+    config.mark_lastrun_timestamp()
+
+    stats = {
+        'runtime': time.time() - start,
+        'total_tracks': total_tracks,
+        'tracks_changed_since_last_run': tracks_changed_since_last_run,
+    }
+    config.save_stats( stats=stats )
+    logr.info( f"\n{pprint.pformat( stats )}" )
 
 
 if __name__ == "__main__":

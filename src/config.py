@@ -1,83 +1,95 @@
+import functools
+import logging
 import netrc
 import os
+import sys
 import time
-
 from configparser import ConfigParser
-from functools import cached_property
 from pathlib import Path
 from plexapi.server import PlexServer
 
-
-class Config:
-    def __init__(
-            self,
-            cfg_path_env_var,
-            default_cfg_path
-            ):
-        self.cfg_path_env_var = str( cfg_path_env_var )
-        self.default_cfg_path = str( default_cfg_path )
-        self.configpath = None
-        self.config = None
-        self.load()
+logr = logging.getLogger( __name__ )
 
 
-    def load( self ) -> ConfigParser:
-        cfg_fn_path = os.getenv( self.cfg_path_env_var, self.default_cfg_path )
-        self.configpath = Path( cfg_fn_path )
-        print( f'configpath: {self.configpath}' )
-        self.config = ConfigParser( allow_no_value=True )
-        self.config.read( self.configpath )
+@functools.cache
+def config_path() -> Path:
+    logr.debug( f"inside {sys._getframe().f_code.co_name}" )
+    env_var = 'PLEX_TOOLS_CONFIG'
+    default_path = Path.home() / '.config/plex-tools/config'
+    cfg_fn_path = os.getenv( env_var, default_path )
+    return Path( cfg_fn_path )
 
 
-    def get_lastrun_timestamp( self ):
-        return self.config['runtime']['lastrun']
+@functools.cache
+def config() -> ConfigParser:
+    logr.debug( f"inside {sys._getframe().f_code.co_name}" )
+    cfg = ConfigParser( allow_no_value=True )
+    cfg.read( config_path() )
+    return cfg
 
 
-    def mark_lastrun_timestamp( self ):
-        self.config.set( 'runtime', 'lastrun', time.time() )
-        self.save()
+@functools.cache
+def server_baseurl() -> str:
+    logr.debug( f"inside {sys._getframe().f_code.co_name}" )
+    cfg = config()
+    proto = cfg['connection']['protocol']
+    host = cfg['connection']['host']
+    baseurl = f'{proto}://{host}'
+    try:
+        port = cfg['connection']['port']
+    except KeyError:
+        pass
+    else:
+        baseurl = f'{proto}://{host}:{port}'
+    return baseurl
 
 
-    def save( self ):
-        with self.configpath.open( mode='w' ) as fh:
-            self.config.write( fh )
+@functools.cache
+def netrc_authenticators() -> netrc.netrc:
+    logr.debug( f"inside {sys._getframe().f_code.co_name}" )
+    server_name = config()['connection']['host']
+    return netrc.netrc().authenticators( server_name )
 
 
-    @cached_property
-    def server_baseurl( self ) -> str:
-        proto = self.config['connection']['protocol']
-        host = self.config['connection']['host']
-        baseurl = f'{proto}://host'
-        try:
-            port = self.config['connection']['port']
-            baseurl = f'{proto}://{host}:{port}'
-        except KeyError:
-            pass
-        return baseurl
+def api_token() -> str:
+    # get the "account" entry for this server
+    return netrc_authenticators()[1]
 
 
-    @cached_property
-    def netrc_authenticators( self ) -> netrc.netrc:
-        server_name = self.config['connection']['host']
-        return netrc.netrc().authenticators( server_name )
+@functools.cache
+def server() -> PlexServer:
+    logr.debug( f"inside {sys._getframe().f_code.co_name}" )
+    server = PlexServer(
+        baseurl=server_baseurl(),
+        token=api_token()
+    )
+    return server
 
 
-    @cached_property
-    def api_token( self ) -> str:
-        # get the "account" entry for this server
-        return self.netrc_authenticators[1]
+@functools.cache
+def music_library() -> plexapi.library.MusicSection:
+    logr.debug( f"inside {sys._getframe().f_code.co_name}" )
+    section_name = config()['library']['music_library_name']
+    library_section = server().library.section( section_name )
+    return library_section
 
 
-    @cached_property
-    def server( self ) -> PlexServer:
-        return PlexServer(
-            baseurl=self.server_baseurl,
-            token=self.api_token
-        )
+def lastrun_timestamp() -> float:
+    return config()['runtime']['lastrun']
 
 
-    @cached_property
-    def music_library( self ) -> plexapi.library.MusicSection:
-        return self.server.library.section(
-            self.config['library']['music_library_name']
-        )
+def mark_lastrun_timestamp():
+    config().set( 'runtime', 'lastrun', str( time.time() ) )
+    save()
+
+
+def save_stats( stats: dict=None ) -> None:
+    if not stats:
+        return
+    config()['stats'] = stats
+    save()
+
+
+def save():
+    with config_path().open( mode='w' ) as fh:
+        config().write( fh )

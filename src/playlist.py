@@ -9,11 +9,9 @@ class Playlist:
             self,
             playlist: plexpai.Playlist = None,
             name: str = None,
-            cfg: config.Config = None,
             ) -> Playlist:
         self.playlist = playlist
         self.name = name
-        self.cfg = cfg
         self.tracks = []
         if self.playlist:
             self.tracks = playlist.items()
@@ -23,11 +21,11 @@ class Playlist:
 
 
     @classmethod
-    def new_by_name( cls, name: str, cfg: config.Config ) -> Playlist:
+    def new_by_name( cls, name: str ) -> Playlist:
         ''' Workaround for Plex's inability to create an empty playlist
         '''
         logr.debug( f"New playlist '{name}'" )
-        return cls( name=name, cfg=cfg )
+        return cls( name=name )
 
 
     def add_track( self, track: plexapi.audio.Track ) -> None:
@@ -49,7 +47,7 @@ class Playlist:
         if not self.playlist:
             if self.pending_additions:
                 logr.debug( f"Create new playlist '{self.name}' with tracks '{self.pending_additions}'" )
-                self.playlist = self.cfg.music_library.createPlaylist(
+                self.playlist = config.music_library().createPlaylist(
                     title=self.name,
                     items=self.pending_additions
                 )
